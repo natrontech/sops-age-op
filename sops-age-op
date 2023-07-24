@@ -30,12 +30,14 @@ Examples:
     Decrypt file:
         $prog -d -k KEY_PATH [ FILE ]
 
-   Generate an age ed25519 key and store it in the 1password vault. The type of the new item will be "Password"
-       $prog -c -k KEY_PATH
+    Generate an age ed25519 key and store it in the 1password vault. The type of the new item will be "Password"
+        $prog -c -t [ TAGS ] -k KEY_PATH
 
 KEY_PATH should have one of the following formats:
     - 'op://vault/title', 'op://vault/title/field', or 'op://vault/title/section/field'
     In the first case, the field name defaults to 'password'
+
+TAGS is a comma separated list for the 1password tags of the created object
 
 1Password configuration:
     For the 1Password cli ('op') to authenticate with a vault, you can sign into a local app with "eval ${ds}(op signin)"
@@ -53,6 +55,7 @@ _HELP
 # params: KEYPATH
 create_key() {
   local keypath="$1"
+  local tags="$2"
   local key field out newkey title vault field
 
   ##
@@ -66,16 +69,22 @@ create_key() {
   # The successs case (key is unique) generates an error, so temporarily disable '+e'
   set +e
   key=$($OP item get "$title" "--vault=$vault" 2>/dev/null)
-  [ $? -eq 0 ] && _help "Key vault:$vault  title:$title already exists - will not overwrite"
+  [ $? -eq 0 ] && _help "Key vault:$vault title:$title already exists - will not overwrite"
   set -e
   newkey="$(age-keygen)"
-  out=$($OP item create --category=password --title="$title" --vault="$vault" "$field=$newkey")
+  if [ -z "$tags" ]; then
+    echo "TAGS: $tags"
+    out=$($OP item create --category=password --title="$title" --vault="$vault" "$field=$newkey")
+  else
+    out=$($OP item create --category=password --title="$title" --vault="$vault" --tags="$tags" "$field=$newkey")
+  fi
   echo "Created vault:$vault, title:$title"
 }
 
 cmd=""
 input=""
 keypath=""
+tags=""
 
 # check dependencies
 [ ! $($AGE --help 2>&1 |grep Usage) ] && _help "Missing 'age' dependency. Please see installation url below."
@@ -85,7 +94,7 @@ keypath=""
 # check params for help
 [[ $1 =~ "^\-h|^--help|^help$" ]] && _help
 
-while getopts ':hcedk:' OPTION; do
+while getopts ':hcedt:k:' OPTION; do
   case $OPTION in
     h) _help
         ;;
@@ -97,6 +106,8 @@ while getopts ':hcedk:' OPTION; do
         ;;
     d) [ -n "$cmd" ] && _help "Only one of -e, -d, or -c may be used"
         cmd="decrypt"
+        ;;
+    t) tags=$OPTARG
         ;;
     k) keypath=$OPTARG
         if [[ ! $keypath =~ ^op://[^/]+/[^/]+/.+$ ]]; then
@@ -117,7 +128,7 @@ shift "$(($OPTIND -1))"
 [ -z "$keypath" ]  && _help "keypath is required. Should be of the form op://vault/title[/field]"
 
 if [ "$cmd" = "create" ]; then
-  create_key $keypath
+  create_key $keypath $tags
 else
   input="$1"
   [ ! -r "$input" ] && _help "Missing or unreadable input file '$input'"
@@ -141,4 +152,4 @@ else
   fi
 fi
 
-unset cmd input key keypath secret pk sk
+unset cmd input key keypath secret pk sk tags

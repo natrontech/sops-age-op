@@ -45,5 +45,5 @@ Decrypt a sops file:
 Generate a new age key and store it in the 1password vault. The type of the new item will be `Password`.
 
 ```bash
-./sops-age-op -c -k KEY_PATH
+./sops-age-op -c -t [ TAGS ] -k KEY_PATH
 ```
