@@ -26,6 +26,7 @@ python3 sops_age_op.py --help
 
 ### Commands
 
+
 #### Encrypt a file
 
 ```bash
@@ -34,6 +35,11 @@ python3 sops_age_op.py encrypt -k KEY_PATH FILE
 or (field defaults to `password`):
 ```bash
 python3 sops_age_op.py encrypt -k op://vault/title FILE
+```
+
+To use a custom .sops.yaml config (for creation_rules, etc):
+```bash
+python3 sops_age_op.py encrypt --sops-config path/to/.sops.yaml -k KEY_PATH FILE
 ```
 
 #### Decrypt a file
@@ -54,12 +60,17 @@ python3 sops_age_op.py create -k KEY_PATH [-t TAGS]
 - The new key is stored as a 1Password item of type `Password`.
 - The public key is printed after creation.
 
+
 #### Rotate secrets to a new age key
 
 Recursively re-encrypt all SOPS-encrypted files in a directory with a new age key:
 
 ```bash
 python3 sops_age_op.py rotate -o OLD_KEY_PATH -n NEW_KEY_PATH -p /path/to/secrets
+```
+You can also specify a custom .sops.yaml config for rotation:
+```bash
+python3 sops_age_op.py rotate -o OLD_KEY_PATH -n NEW_KEY_PATH -p /path/to/secrets --sops-config path/to/.sops.yaml
 ```
 - All files encrypted with the old public key will be decrypted and re-encrypted with the new key.
 

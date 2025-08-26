@@ -76,8 +76,12 @@ def get_age_keys_from_1password(keypath):
     sk = parts[7]
     return pk, sk
 
-def sops_encrypt(file_path, pk):
-    run(["sops", "--encrypt", "-a", pk, "-i", file_path], capture_output=False)
+def sops_encrypt(file_path, pk, sops_config=None):
+    cmd = ["sops", "--encrypt", "-a", pk]
+    if sops_config and sops_config.strip():
+        cmd += ["--config", sops_config]
+    cmd += ["-i", file_path]
+    run(cmd, capture_output=False)
 
 def sops_decrypt(file_path, sk):
     env = os.environ.copy()
@@ -87,17 +91,22 @@ def sops_decrypt(file_path, sk):
 def is_sops_encrypted_with_pubkey(file_path, pubkey):
     try:
         with open(file_path, "r") as f:
-            for _ in range(20):
-                line = f.readline()
-                if not line:
-                    break
-                if pubkey in line:
-                    return True
+            in_sops_section = False
+            for line in f:
+                if not in_sops_section:
+                    if line.strip() == "sops:":
+                        in_sops_section = True
+                else:
+                    # End of sops section if next top-level key or end of file
+                    if re.match(r'^\S', line) and not line.strip().startswith('sops:'):
+                        break
+                    if pubkey in line:
+                        return True
         return False
     except Exception:
         return False
 
-def rotate_secrets(path, old_keypath, new_keypath):
+def rotate_secrets(path, old_keypath, new_keypath, sops_config=None):
     old_pk, old_sk = get_age_keys_from_1password(old_keypath)
     new_pk, _ = get_age_keys_from_1password(new_keypath)
     for root, _, files in os.walk(path):
@@ -108,7 +117,7 @@ def rotate_secrets(path, old_keypath, new_keypath):
             if is_sops_encrypted_with_pubkey(fpath, old_pk):
                 print(f"Rotating secret in {fpath}")
                 sops_decrypt(fpath, old_sk)
-                sops_encrypt(fpath, new_pk)
+                sops_encrypt(fpath, new_pk, sops_config)
 
 def main():
     parser = argparse.ArgumentParser(description="SOPS encryption with age and 1Password")
@@ -121,6 +130,7 @@ def main():
     parser_encrypt = subparsers.add_parser("encrypt", help="Encrypt a file")
     parser_encrypt.add_argument("-k", "--keypath", required=True)
     parser_encrypt.add_argument("file")
+    parser_encrypt.add_argument("--sops-config", default=None, help="Path to .sops.yaml config file")
 
     parser_decrypt = subparsers.add_parser("decrypt", help="Decrypt a file")
     parser_decrypt.add_argument("-k", "--keypath", required=True)
@@ -130,6 +140,7 @@ def main():
     parser_rotate.add_argument("-o", "--old-keypath", required=True)
     parser_rotate.add_argument("-n", "--new-keypath", required=True)
     parser_rotate.add_argument("-p", "--path", required=True, help="Directory to search for sops-encrypted files")
+    parser_rotate.add_argument("--sops-config", default=None, help="Path to .sops.yaml config file")
 
     args = parser.parse_args()
 
@@ -141,7 +152,7 @@ def main():
             if re.match(r"^op://[^/]+/[^/]+$", keypath):
                 keypath = keypath + "/password"
             pk, _ = get_age_keys_from_1password(keypath)
-            sops_encrypt(args.file, pk)
+            sops_encrypt(args.file, pk, args.sops_config)
         elif args.command == "decrypt":
             keypath = args.keypath
             if re.match(r"^op://[^/]+/[^/]+$", keypath):
@@ -149,7 +160,7 @@ def main():
             _, sk = get_age_keys_from_1password(keypath)
             sops_decrypt(args.file, sk)
         elif args.command == "rotate":
-            rotate_secrets(args.path, args.old_keypath, args.new_keypath)
+            rotate_secrets(args.path, args.old_keypath, args.new_keypath, args.sops_config)
         else:
             parser.print_help()
             sys.exit(1)
