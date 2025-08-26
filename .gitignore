@@ -1,0 +1,20 @@
+# swap
+[._]*.s[a-w][a-z]
+[._]s[a-w][a-z]
+# session
+Session.vim
+# temporary
+.netrwhist
+*~
+# auto-generated tag files
+tags
+# Apple
+.DS_Store
+# age priv key
+*.agekey
+temp/
+# vscode
+.vscode/
+.decrypted~*
+# temp
+temp/

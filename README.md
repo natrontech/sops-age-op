@@ -1,49 +1,71 @@
-# Simple CLI for SOPS with age and 1password
 
-This simple bash script is a wrapper for SOPS encryption with a age key saved in 1password.
-You can directly encrypt and decrypt files without copy the public/private key onto the machine.
-The script uses the 1password-host integration, where you have to be logged in (see Dependencies).
+# SOPS + age + 1Password Python CLI
 
-> ⚠️  At the moment, the script only supports the [in-place](https://github.com/getsops/sops#encrypt-or-decrypt-a-file-in-place) parameter of SOPS and will therefore encrypt/decrypt a file directly in place! 
+This Python script is a CLI wrapper for SOPS encryption/decryption using an age key stored in 1Password. It allows you to encrypt, decrypt, rotate, and manage secrets without copying private keys to your machine.
 
+> ⚠️ All operations are performed in-place: files are encrypted/decrypted directly!
 
 ## Dependencies
 
 - [age](https://age-encryption.org)
 - [sops](https://github.com/getsops/sops)
-- [1password cli](https://developer.1password.com/docs/cli/get-started) (`op`)
+- [1Password CLI (`op`)](https://developer.1password.com/docs/cli/get-started)
+- Python 3.7+
 
 ## Usage
 
 ```bash
-sops-age-op --help
+python3 sops_age_op.py --help
 ```
 
-- `KEY_PATH` is the path to the key in the 1password vault in one of the following formats:
-  - `op://vault/title` (in this case, the defualt field name is `password`)
-  - `op://vault/title/field`
-  - `op://vault/title/section/field`
+### Key Path Format
 
-### Encryption
+- `op://vault/title` (defaults to field `password`)
+- `op://vault/title/field`
+- `op://vault/title/section/field`
 
-Encrypt a file:
+### Commands
+
+#### Encrypt a file
 
 ```bash
-./sops-age-op -e -k KEY_PATH [ FILE ]
+python3 sops_age_op.py encrypt -k KEY_PATH FILE
+```
+or (field defaults to `password`):
+```bash
+python3 sops_age_op.py encrypt -k op://vault/title FILE
 ```
 
-### Decryption
-
-Decrypt a sops file:
+#### Decrypt a file
 
 ```bash
-./sops-age-op -d -k KEY_PATH [ FILE ]
+python3 sops_age_op.py decrypt -k KEY_PATH FILE
+```
+or:
+```bash
+python3 sops_age_op.py decrypt -k op://vault/title FILE
 ```
 
-### Generate a new key
-
-Generate a new age key and store it in the 1password vault. The type of the new item will be `Password`.
+#### Generate a new age key and store in 1Password
 
 ```bash
-./sops-age-op -c -t [ TAGS ] -k KEY_PATH
+python3 sops_age_op.py create -k KEY_PATH [-t TAGS]
+```
+- The new key is stored as a 1Password item of type `Password`.
+- The public key is printed after creation.
+
+#### Rotate secrets to a new age key
+
+Recursively re-encrypt all SOPS-encrypted files in a directory with a new age key:
+
+```bash
+python3 sops_age_op.py rotate -o OLD_KEY_PATH -n NEW_KEY_PATH -p /path/to/secrets
+```
+- All files encrypted with the old public key will be decrypted and re-encrypted with the new key.
+
+## 1Password Authentication
+
+You must be signed in to 1Password CLI (`op`). Use:
+```bash
+eval $(op signin)
 ```
