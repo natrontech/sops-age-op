@@ -16,3 +16,12 @@ repos:
     rev: v8.28.0
     hooks:
       - id: gitleaks
+
+  # Settings live in [tool.ruff] in pyproject.toml, so these hooks and a local
+  # `uv run ruff ...` apply identical rules.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.1
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format

@@ -1,0 +1,23 @@
+[project]
+name = "sops-age-op"
+version = "0.1.0"
+description = "CLI wrapper for SOPS encryption/decryption using an age key stored in 1Password"
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+dev = ["ruff>=0.14", "ty>=0.0.1a20"]
+
+# This repository ships a single script that is run as `python3 sops_age_op.py`,
+# never pip-installed. `package = false` lets uv manage the dev environment and
+# the lockfile without a build backend or any packaging layout.
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+extend-select = ["I", "UP", "B"]
+# EXE001: the script keeps its shebang for readability but is documented as
+# `python3 sops_age_op.py`, so it is deliberately not mode 755.
+ignore = ["EXE001"]

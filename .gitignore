@@ -18,3 +18,8 @@ temp/
 .decrypted~*
 # temp
 temp/
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.ruff_cache/

@@ -1,0 +1,58 @@
+name: CI
+
+# Runs on pull requests and on pushes to main only. Running on both
+# `push: [*]` and `pull_request: [*]` would execute every job twice for any
+# branch that has a PR open.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  lint:
+    name: Lint, type-check and smoke
+    runs-on: ubuntu-latest
+    # Granted per job, not at workflow level: a job-level permissions block
+    # replaces the workflow default rather than merging with it.
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+
+      # --locked fails rather than silently re-resolving if uv.lock is stale
+      # relative to pyproject.toml.
+      - name: Install the dev environment
+        run: uv sync --extra dev --locked
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format
+        run: uv run ruff format --check .
+
+      # ty is pre-1.0 and its diagnostics still move between releases, so a new
+      # ty version must not be able to block an unrelated pull request. Drop
+      # continue-on-error once ty is stable.
+      - name: Type-check with ty
+        continue-on-error: true
+        run: uv run ty check .
+
+      # The script has no tests, so this is the only thing proving argparse
+      # still wires up and the module imports after a lint autofix.
+      - name: Smoke-test the CLI
+        run: uv run python3 sops_age_op.py --help
