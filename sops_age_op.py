@@ -1,26 +1,30 @@
 #!/usr/bin/env python3
 import argparse
-import subprocess
-import sys
 import os
 import re
-import json
-from pathlib import Path
+import subprocess
+import sys
 
 
 def run(cmd, input=None, capture_output=True, check=True, env=None, merge_err=False):
     if merge_err:
-        result = subprocess.run(cmd, input=input, capture_output=True, text=True, check=check, env=env)
+        result = subprocess.run(
+            cmd, input=input, capture_output=True, text=True, check=check, env=env
+        )
         return (result.stdout + "\n" + result.stderr).strip()
     else:
-        result = subprocess.run(cmd, input=input, capture_output=capture_output, text=True, check=check, env=env)
+        result = subprocess.run(
+            cmd, input=input, capture_output=capture_output, text=True, check=check, env=env
+        )
         if capture_output:
             return result.stdout.strip()
         else:
             return None
 
+
 def op_read(keypath):
     return run(["op", "read", keypath])
+
 
 def op_item_get(vault, title):
     try:
@@ -28,15 +32,26 @@ def op_item_get(vault, title):
     except subprocess.CalledProcessError:
         return None
 
+
 def op_item_create(vault, title, field, value, tags=None):
-    cmd = ["op", "item", "create", "--category=password", f"--title={title}", f"--vault={vault}", f"{field}={value}"]
+    cmd = [
+        "op",
+        "item",
+        "create",
+        "--category=password",
+        f"--title={title}",
+        f"--vault={vault}",
+        f"{field}={value}",
+    ]
     if tags:
         cmd.insert(-1, f"--tags={tags}")
     return run(cmd)
 
+
 def age_keygen():
     # Capture both stdout and stderr, as public key is printed to stderr
     return run(["age-keygen"], merge_err=True)
+
 
 def parse_keypath(keypath):
     m = re.match(r"op://([^/]+)/([^/]+)(?:/(.+))?", keypath)
@@ -45,10 +60,13 @@ def parse_keypath(keypath):
     vault, title, field = m.group(1), m.group(2), m.group(3) or "password"
     return vault, title, field
 
+
 def create_key(keypath, tags=None):
     vault, title, field = parse_keypath(keypath)
     if op_item_get(vault, title):
-        print(f"Key vault:{vault} title:{title} already exists - will not overwrite", file=sys.stderr)
+        print(
+            f"Key vault:{vault} title:{title} already exists - will not overwrite", file=sys.stderr
+        )
         sys.exit(1)
     newkey = age_keygen()
     op_item_create(vault, title, field, newkey, tags)
@@ -60,10 +78,11 @@ def create_key(keypath, tags=None):
     pubkey = None
     for line in newkey.splitlines():
         if line.strip().startswith("# public key:"):
-            pubkey = line.split("# public key:",1)[1].strip()
+            pubkey = line.split("# public key:", 1)[1].strip()
             break
     if pubkey:
         print(f"Public key: {pubkey}")
+
 
 def get_age_keys_from_1password(keypath):
     key = op_read(keypath)
@@ -76,6 +95,7 @@ def get_age_keys_from_1password(keypath):
     sk = parts[7]
     return pk, sk
 
+
 def sops_encrypt(file_path, pk, sops_config=None):
     cmd = ["sops", "--encrypt", "-a", pk]
     if sops_config and sops_config.strip():
@@ -83,14 +103,16 @@ def sops_encrypt(file_path, pk, sops_config=None):
     cmd += ["-i", file_path]
     run(cmd, capture_output=False)
 
+
 def sops_decrypt(file_path, sk):
     env = os.environ.copy()
     env["SOPS_AGE_KEY"] = sk
     run(["sops", "--decrypt", "-i", file_path], capture_output=False, env=env)
 
+
 def is_sops_encrypted_with_pubkey(file_path, pubkey):
     try:
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             in_sops_section = False
             for line in f:
                 if not in_sops_section:
@@ -98,13 +120,16 @@ def is_sops_encrypted_with_pubkey(file_path, pubkey):
                         in_sops_section = True
                 else:
                     # End of sops section if next top-level key or end of file
-                    if re.match(r'^\S', line) and not line.strip().startswith('sops:'):
+                    if re.match(r"^\S", line) and not line.strip().startswith("sops:"):
                         break
                     if pubkey in line:
                         return True
         return False
-    except Exception:
+    # rotate walks arbitrary directories, so unreadable and binary files are
+    # expected here and simply are not sops-encrypted with this key.
+    except (OSError, UnicodeDecodeError):
         return False
+
 
 def rotate_secrets(path, old_keypath, new_keypath, sops_config=None):
     old_pk, old_sk = get_age_keys_from_1password(old_keypath)
@@ -119,6 +144,7 @@ def rotate_secrets(path, old_keypath, new_keypath, sops_config=None):
                 sops_decrypt(fpath, old_sk)
                 sops_encrypt(fpath, new_pk, sops_config)
 
+
 def main():
     parser = argparse.ArgumentParser(description="SOPS encryption with age and 1Password")
     subparsers = parser.add_subparsers(dest="command")
@@ -130,7 +156,9 @@ def main():
     parser_encrypt = subparsers.add_parser("encrypt", help="Encrypt a file")
     parser_encrypt.add_argument("-k", "--keypath", required=True)
     parser_encrypt.add_argument("file")
-    parser_encrypt.add_argument("--sops-config", default=None, help="Path to .sops.yaml config file")
+    parser_encrypt.add_argument(
+        "--sops-config", default=None, help="Path to .sops.yaml config file"
+    )
 
     parser_decrypt = subparsers.add_parser("decrypt", help="Decrypt a file")
     parser_decrypt.add_argument("-k", "--keypath", required=True)
@@ -139,7 +167,9 @@ def main():
     parser_rotate = subparsers.add_parser("rotate", help="Rotate secrets to a new age key")
     parser_rotate.add_argument("-o", "--old-keypath", required=True)
     parser_rotate.add_argument("-n", "--new-keypath", required=True)
-    parser_rotate.add_argument("-p", "--path", required=True, help="Directory to search for sops-encrypted files")
+    parser_rotate.add_argument(
+        "-p", "--path", required=True, help="Directory to search for sops-encrypted files"
+    )
     parser_rotate.add_argument("--sops-config", default=None, help="Path to .sops.yaml config file")
 
     args = parser.parse_args()
@@ -165,13 +195,16 @@ def main():
             parser.print_help()
             sys.exit(1)
     except ValueError as e:
-        print(f"Error: {e}\nKey path must be of the form 'op://vault/title[/field]'.", file=sys.stderr)
+        print(
+            f"Error: {e}\nKey path must be of the form 'op://vault/title[/field]'.", file=sys.stderr
+        )
         sys.exit(1)
     except subprocess.CalledProcessError as e:
         print(f"External command failed: {' '.join(e.cmd)}", file=sys.stderr)
         if e.stderr:
             print(f"Error output: {e.stderr.strip()}", file=sys.stderr)
-        sys.exit(e.returncode if hasattr(e, 'returncode') else 1)
+        sys.exit(e.returncode if hasattr(e, "returncode") else 1)
+
 
 if __name__ == "__main__":
     main()
